@@ -2,19 +2,13 @@ package hhbot.fetcher
 
 import akka.actor._
 import akka.actor.SupervisorStrategy._
-import akka.pattern.{ask, pipe}
-import akka.util.Timeout
 
 import dispatch.Http
 
-import java.net.URL
-
 import scala.concurrent.duration._
 
-import hhbot.frontier._
-
 /**
- * @author andrei
+ * @author Andrei Heidelbacher
  */
 class FetcherManager(http: Http) extends Actor {
   import context._
@@ -26,7 +20,7 @@ class FetcherManager(http: Http) extends Actor {
   }
 
   createFetchers(64)
-  system.scheduler.schedule(1.seconds, 1.seconds) {
+  system.scheduler.schedule(1.seconds, 3.seconds) {
     notifyFetchers()
   }
 

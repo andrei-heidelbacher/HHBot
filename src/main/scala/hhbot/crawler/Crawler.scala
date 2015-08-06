@@ -9,16 +9,16 @@ import dispatch.Http
 
 import robots.protocol.exclusion.html._
 
-import java.net.URL
+import java.net.URI
 
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 import hhbot.fetcher._
 import hhbot.frontier._
 
 /**
- * @author andrei
+ * @author Andrei Heidelbacher
  */
 class Crawler(configuration: Configuration, requester: ActorRef) extends Actor {
   import context._
@@ -38,46 +38,47 @@ class Crawler(configuration: Configuration, requester: ActorRef) extends Actor {
     .setFollowRedirects(configuration.followRedirects)
     .setMaximumNumberOfRedirects(configuration.maximumNumberOfRedirects)
   }
-  private val manager = actorOf(
-      FetcherManager.props(http),
-      "Fetcher-Manager")
-  private val frontier = actorOf(
-      FrontierManager.props(configuration.agentName, http),
-      "URL-Frontier")
+  private val manager =
+    actorOf(FetcherManager.props(http), "Fetcher-Manager")
+  private val frontier =
+    actorOf(FrontierManager.props(configuration, http), "URI-Frontier")
 
   watch(manager)
   watch(frontier)
 
-  private def crawlURL(url: URL): Unit = {
-    if (configuration.filterURL(url))
-      frontier ! Push(url)
+  private def crawlURI(uri: URI): Unit = {
+    if (configuration.filterURI(uri))
+      frontier ! Push(uri)
   }
 
   def receive: Receive = {
-    case CrawlRequest(url) => frontier ! Push(url)
+    case CrawlRequest(uri) => frontier ! Push(uri)
     case DemandRequest =>
       val requester = sender()
-      implicit val timeout = Timeout(15.seconds)
+      implicit val timeout =
+        Timeout(configuration.maximumCrawlDelayInMs.milliseconds)
       val request = (frontier ? Pull).mapTo[PullResult]
-        .map { case PullResult(url) => FetchRequest(url) }
+        .map { case PullResult(uri) => FetchRequest(uri) }
       request.pipeTo(requester)(self)
-    case FetchResult(url, result) =>
+    case FetchResult(uri, result) =>
       result match {
         case Success(content) =>
-          val page = Page(url, content)
-          val tags = page.metaTags(configuration.agentName)
-          if (tags.contains(All) || tags.contains(Index))
-            requester ! Result(url, content)
-          if (tags.contains(All) || tags.contains(Follow))
-            page.outlinks.foreach(crawlURL)
-        case Failure(t) => requester ! Failed(url, t)
+          for (page <- Try(Page(uri.toURL, content))) {
+            val tags = page.metaTags(configuration.agentName)
+            if (tags.contains(All) || tags.contains(Index))
+              requester ! Result(uri, content)
+            if (tags.contains(All) || tags.contains(Follow))
+              page.outlinks
+                .flatMap(link => Try(link.toURI).toOption)
+                .foreach(crawlURI)
+          }
+        case Failure(t) => requester ! Failed(uri, t)
       }
-    case Status.Failure(t) =>
   }
 }
 
 object Crawler {
-  case class CrawlRequest(url: URL)
+  case class CrawlRequest(uri: URI)
 
   def props(configuration: Configuration, requester: ActorRef): Props =
     Props(new Crawler(configuration, requester))

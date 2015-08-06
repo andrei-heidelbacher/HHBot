@@ -2,44 +2,51 @@ package hhbot.runner
 
 import akka.actor._
 
-import java.net.URL
+import java.io.PrintWriter
+import java.net.URI
 
 import hhbot.crawler._
 
 /**
- * @author andrei
+ * @author Andrei Heidelbacher
  */
 object Runner {
   def main (args: Array[String]): Unit = {
     val system = ActorSystem("HHBot")
     val requester = system.actorOf(Props(new Requester {
+      val writer = new PrintWriter("history.log")
+
       def configuration = Configuration(
           agentName = "HHBot",
           userAgentString = "HHBot",
-          connectionTimeoutInMs = 5000,
-          requestTimeoutInMs = 15000,
+          connectionTimeoutInMs = 2500,
+          requestTimeoutInMs = 5000,
           followRedirects = true,
           maximumNumberOfRedirects = 3,
-          filterURL = url => {
-            !url.toString.endsWith(".xml") ||
-              !url.toString.endsWith(".jpg") ||
-              !url.toString.endsWith(".png") ||
-              !url.toString.endsWith(".mp3") ||
-              !url.toString.endsWith(".rss")
-          })
+          filterURI = uri => {
+            !uri.toString.endsWith(".xml") &&
+              !uri.toString.endsWith(".jpg") &&
+              !uri.toString.endsWith(".png") &&
+              !uri.toString.endsWith(".mp3") &&
+              !uri.toString.endsWith(".rss")
+          },
+          minimumCrawlDelayInMs = 250,
+          maximumCrawlDelayInMs = 1000)
 
-      def seedURLs = Seq(
-          new URL("http://www.google.com"),
-          new URL("http://www.wikipedia.org"),
-          new URL("http://www.reddit.com"),
-          new URL("http://www.gsp.ro"))
+      def seedURIs = Seq(
+          new URI("http://www.google.com"),
+          new URI("http://www.wikipedia.org"),
+          new URI("http://www.reddit.com"),
+          new URI("http://www.gsp.ro"))
 
-      def processResult(url: URL, content: Array[Byte]) = {
-        println("Retrieved " + url.toString)
+      def processResult(uri: URI, content: Array[Byte]) = {
+        println("Retrieved " + uri.toString)
+        writer.println(uri.toString)
+        writer.flush()
       }
 
-      def processFailure(url: URL, error: Throwable) = {
-        println("Failed " + url.toString + " because " + error.getMessage)
+      def processFailure(uri: URI, error: Throwable) = {
+        println("Failed " + uri.toString + " because " + error.getMessage)
       }
     }), "Requester")
   }

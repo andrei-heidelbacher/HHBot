@@ -2,10 +2,10 @@ package hhbot.crawler
 
 import akka.actor._
 
-import java.net.URL
+import java.net.URI
 
 /**
- * @author andrei
+ * @author Andrei Heidelbacher
  */
 abstract class Requester extends Actor {
   import context._
@@ -15,24 +15,24 @@ abstract class Requester extends Actor {
   private val crawler = actorOf(Crawler.props(configuration, self), "Crawler")
 
   watch(crawler)
-  seedURLs.foreach(url => crawler ! CrawlRequest(url))
+  seedURIs.foreach(uri => crawler ! CrawlRequest(uri))
 
   protected def configuration: Configuration
 
-  protected def seedURLs: Seq[URL]
+  protected def seedURIs: Seq[URI]
 
-  protected def processResult(url: URL, content: Array[Byte]): Unit
+  protected def processResult(uri: URI, content: Array[Byte]): Unit
 
-  protected def processFailure(url: URL, error: Throwable): Unit
+  protected def processFailure(uri: URI, error: Throwable): Unit
 
   def receive: Receive = {
-    case Result(url, content) => processResult(url, content)
-    case Failed(url, error) => processFailure(url, error)
+    case Result(uri, content) => processResult(uri, content)
+    case Failed(uri, error) => processFailure(uri, error)
     case Terminated(_) => self ! PoisonPill
   }
 }
 
 object Requester {
-  case class Result(url: URL, content: Array[Byte])
-  case class Failed(url: URL, error: Throwable)
+  case class Result(uri: URI, content: Array[Byte])
+  case class Failed(uri: URI, error: Throwable)
 }

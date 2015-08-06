@@ -5,97 +5,98 @@ import akka.actor._
 import robots.protocol.exclusion.robotstxt.{Robotstxt, RuleSet}
 import robots.protocol.inclusion.Sitemap
 
-import java.net.URL
+import java.net.{URI, URL}
 import java.util.Calendar
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
 import scala.util.Try
 
+import hhbot.crawler.Configuration
 import hhbot.fetcher._
 
 /**
- * @author andrei
+ * @author Andrei Heidelbacher
  */
-class HostManager(host: URL, agentName: String, resolverProps: Props)
+class HostManager(host: URI, configuration: Configuration, resolverProps: Props)
   extends Actor {
   import context._
   import HostManager._
   import Fetcher._
 
-  setReceiveTimeout(30.seconds)
+  setReceiveTimeout(15.seconds)
 
   private val resolver = context.actorOf(resolverProps, "resolver")
   private var robotstxt = RuleSet.empty
   private var lastRequest = 0.seconds
 
-  resolver ! FetchRequest(new URL(host, "/robots.txt"))
+  resolver ! FetchRequest(new URL(host.toURL, "/robots.txt").toURI)
 
   private def getTimeNow: FiniteDuration =
     Calendar.getInstance().getTimeInMillis.milliseconds
 
   private def handleRobots(content: Array[Byte]): Unit = {
     val robots = Robotstxt(content)
-    robotstxt = robots.getRules(agentName)
-    robots.sitemaps.flatMap(link => Try(new URL(link)).toOption).foreach {
+    robotstxt = robots.getRules(configuration.agentName)
+    robots.sitemaps.flatMap(link => Try(new URI(link)).toOption).foreach {
       resolver ! FetchRequest(_)
     }
   }
 
-  private def handleSitemap(url: URL, content: Array[Byte]): Unit = {
-    val sitemap = Sitemap(url, new String(content, "UTF-8"))
-    sitemap.links.foreach { link =>
-      if (sitemap.isSitemapIndex)
-        resolver ! FetchRequest(link)
-      else
-        self ! Push(link)
-    }
+  private def handleSitemap(uri: URI, content: Array[Byte]): Unit = for {
+    sitemap <- Try(Sitemap(uri.toURL, new String(content, "UTF-8")))
+    link <- sitemap.links
+    linkURI <- Try(link.toURI)
+  } {
+    if (sitemap.isSitemapIndex) resolver ! FetchRequest(linkURI)
+    else self ! Push(linkURI)
   }
 
-  private def resolve(result: FetchResult): Unit = {
-    for (content <- result.content) {
-      if (result.url.getPath == "/robots.txt")
-        handleRobots(content)
-      else
-        handleSitemap(result.url, content)
-    }
+  private def resolve(result: FetchResult): Unit = for {
+    content <- result.content
+    uri = result.uri
+  } {
+    if (uri.getPath == "/robots.txt") handleRobots(content)
+    else handleSitemap(uri, content)
   }
 
   def receive: Receive = emptyHost
 
-  def emptyHost: Receive = {
+  private def emptyHost: Receive = {
     case result: FetchResult => resolve(result)
-    case Push(url) =>
-      if (robotstxt.isAllowed(url.getPath))
-        become(nonEmptyHost(Queue(url)))
+    case Push(uri) =>
+      if (robotstxt.isAllowed(uri.getPath))
+        become(nonEmptyHost(Queue(uri)))
     case ReceiveTimeout => self ! PoisonPill
   }
 
-  def nonEmptyHost(urls: Queue[URL]): Receive = {
+  private def nonEmptyHost(uris: Queue[URI]): Receive = {
     case result: FetchResult => resolve(result)
-    case Push(url) =>
-      if (robotstxt.isAllowed(url.getPath))
-        become(nonEmptyHost(urls.enqueue(url)))
+    case Push(uri) =>
+      if (robotstxt.isAllowed(uri.getPath))
+        become(nonEmptyHost(uris.enqueue(uri)))
     case Pull =>
-      val (url, remainingURLs) = urls.dequeue
+      val (uri, remainingURIs) = uris.dequeue
       val requester = sender()
-      val delay = robotstxt.delayInMs.milliseconds - (getTimeNow - lastRequest)
-      //system.scheduler.scheduleOnce(delay) {
+      val delay = configuration.minimumCrawlDelayInMs.milliseconds
+        .max(robotstxt.delayInMs.milliseconds - (getTimeNow - lastRequest))
+      system.scheduler.scheduleOnce(delay) {
         lastRequest = getTimeNow
-        requester ! PullResult(url)
-      //}
-      if (remainingURLs.isEmpty)
-        become(emptyHost)
-      else
-        become(nonEmptyHost(remainingURLs))
+        requester ! PullResult(uri)
+      }
+      if (remainingURIs.isEmpty) become(emptyHost)
+      else become(nonEmptyHost(remainingURIs))
   }
 }
 
 object HostManager {
-  case class Push(url: URL)
+  case class Push(uri: URI)
   case object Pull
-  case class PullResult(url: URL)
+  case class PullResult(uri: URI)
 
-  def props(host: URL, agentName: String, resolverProps: Props): Props =
-    Props(new HostManager(host, agentName, resolverProps))
+  def props(
+      host: URI,
+      configuration: Configuration,
+      resolverProps: Props): Props =
+    Props(new HostManager(host, configuration, resolverProps))
 }

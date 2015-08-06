@@ -1,42 +1,49 @@
 package hhbot.frontier
 
 import akka.actor._
+import akka.actor.SupervisorStrategy._
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 
 import dispatch.Http
 
-import java.net.{MalformedURLException, URL}
+import java.net.URI
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
+import scala.util.Try
 
+import hhbot.crawler.Configuration
 import hhbot.fetcher.Fetcher
 
 /**
- * @author andrei
+ * @author Andrei Heidelbacher
  */
-class FrontierManager(agentName: String, resolverProps: Props) extends Actor {
+class FrontierManager(configuration: Configuration, resolverProps: Props)
+  extends Actor {
   import context._
   import HostManager._
+
+  override val supervisorStrategy = OneForOneStrategy() {
+    case _ => Stop
+  }
 
   private var hostToManager = Map.empty[String, ActorRef]
   private var managerToHost = Map.empty[ActorRef, String]
   private var hostQueue = Queue.empty[String]
+  private var history = Set.empty[URI]
 
-  private def addHost(url: URL): Unit = {
-    try {
-      val host = new URL(url.getProtocol + "://" + url.getHost)
-      val props = HostManager.props(host, agentName, resolverProps)
-      val manager = actorOf(props, url.getHost)
-      watch(manager)
-      hostToManager += url.getHost -> manager
-      managerToHost += manager -> url.getHost
-      hostQueue = hostQueue.enqueue(url.getHost)
-    } catch {
-      case e: MalformedURLException =>
-      case e: InvalidActorNameException =>
-    }
+  private def addHost(uri: URI): Unit = for {
+    hostURI <- Try(new URI(uri.getScheme + "://" + uri.getAuthority))
+    host <- Option(uri.getAuthority)
+  } {
+    val props =
+      HostManager.props(hostURI, configuration, resolverProps)
+    val manager = actorOf(props, host)
+    watch(manager)
+    hostToManager += host -> manager
+    managerToHost += manager -> host
+    hostQueue = hostQueue.enqueue(host)
   }
 
   private def pullHost(): String = {
@@ -52,23 +59,24 @@ class FrontierManager(agentName: String, resolverProps: Props) extends Actor {
 
   def receive: Receive = {
     case Pull =>
-      val requester = sender()
-      val host = pullHost()
-      implicit val timeout = Timeout(15.seconds)
-      (hostToManager(host) ? Pull).pipeTo(requester)(self)
-    case Push(url) =>
-      if (!hostToManager.contains(url.getHost))
-        addHost(url)
-      hostToManager.get(url.getHost).foreach(_.forward(Push(url)))
+      implicit val timeout =
+        Timeout(configuration.maximumCrawlDelayInMs.milliseconds)
+      (hostToManager(pullHost()) ? Pull).pipeTo(sender())(self)
+    case Push(uri) =>
+      if (!history.contains(uri)) {
+        if (!hostToManager.contains(uri.getAuthority))
+          addHost(uri)
+        hostToManager.get(uri.getAuthority).foreach(_.forward(Push(uri)))
+        history += uri
+      }
     case Terminated(manager) =>
       val host = managerToHost(manager)
       hostToManager -= host
       managerToHost -= manager
-    case Status.Failure(t) =>
   }
 }
 
 object FrontierManager {
-  def props(agentName: String, http: Http): Props =
-    Props(new FrontierManager(agentName, Fetcher.props(http)))
+  def props(configuration: Configuration, http: Http): Props =
+    Props(new FrontierManager(configuration, Fetcher.props(http)))
 }
