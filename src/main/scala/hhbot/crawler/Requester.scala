@@ -7,6 +7,11 @@ import java.net.URI
 /**
  * @author Andrei Heidelbacher
  */
+object Requester {
+  case class Result(uri: URI, content: Array[Byte])
+  case class Failed(uri: URI, error: Throwable)
+}
+
 abstract class Requester extends Actor {
   import context._
   import Requester._
@@ -30,9 +35,4 @@ abstract class Requester extends Actor {
     case Failed(uri, error) => processFailure(uri, error)
     case Terminated(_) => self ! PoisonPill
   }
-}
-
-object Requester {
-  case class Result(uri: URI, content: Array[Byte])
-  case class Failed(uri: URI, error: Throwable)
 }

@@ -14,7 +14,10 @@ case class Configuration(
     maximumNumberOfRedirects: Int,
     filterURI: URI => Boolean,
     minimumCrawlDelayInMs: Int,
-    maximumCrawlDelayInMs: Int) {
+    maximumCrawlDelayInMs: Int,
+    maximumHistorySize: Int,
+    hostBatchSize: Int,
+    crawlDurationInMs: Long) {
   require(agentName.nonEmpty)
   require(userAgentString.startsWith(agentName))
   require(connectionTimeoutInMs > 0)
@@ -23,4 +26,7 @@ case class Configuration(
   require(maximumNumberOfRedirects >= 0)
   require(minimumCrawlDelayInMs > 100)
   require(maximumCrawlDelayInMs > minimumCrawlDelayInMs)
+  require(maximumHistorySize > 0)
+  require(hostBatchSize > 0)
+  require(crawlDurationInMs > 0L)
 }

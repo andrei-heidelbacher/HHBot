@@ -2,52 +2,38 @@ package hhbot.runner
 
 import akka.actor._
 
-import java.io.PrintWriter
 import java.net.URI
+
+import scala.concurrent.duration._
 
 import hhbot.crawler._
 
 /**
  * @author Andrei Heidelbacher
  */
-object Runner {
-  def main (args: Array[String]): Unit = {
-    val system = ActorSystem("HHBot")
+abstract class Runner {
+  def configuration: Configuration
+
+  def seedURIs: Seq[URI]
+
+  def processResult(uri: URI, content: Array[Byte]): Unit
+
+  def processFailure(uri: URI, error: Throwable): Unit
+
+  final def main(args: Array[String]): Unit = {
+    val system = ActorSystem(configuration.agentName)
     val requester = system.actorOf(Props(new Requester {
-      val writer = new PrintWriter("history.log")
-
-      def configuration = Configuration(
-          agentName = "HHBot",
-          userAgentString = "HHBot",
-          connectionTimeoutInMs = 2500,
-          requestTimeoutInMs = 5000,
-          followRedirects = true,
-          maximumNumberOfRedirects = 3,
-          filterURI = uri => {
-            !uri.toString.endsWith(".xml") &&
-              !uri.toString.endsWith(".jpg") &&
-              !uri.toString.endsWith(".png") &&
-              !uri.toString.endsWith(".mp3") &&
-              !uri.toString.endsWith(".rss")
-          },
-          minimumCrawlDelayInMs = 250,
-          maximumCrawlDelayInMs = 1000)
-
-      def seedURIs = Seq(
-          new URI("http://www.google.com"),
-          new URI("http://www.wikipedia.org"),
-          new URI("http://www.reddit.com"),
-          new URI("http://www.gsp.ro"))
-
-      def processResult(uri: URI, content: Array[Byte]) = {
-        println("Retrieved " + uri.toString)
-        writer.println(uri.toString)
-        writer.flush()
-      }
-
-      def processFailure(uri: URI, error: Throwable) = {
-        println("Failed " + uri.toString + " because " + error.getMessage)
-      }
+      def configuration = this.configuration
+      def seedURIs = this.seedURIs
+      def processResult(uri: URI, content: Array[Byte]) =
+        this.processResult(uri, content)
+      def processFailure(uri: URI, error: Throwable) =
+        this.processFailure(uri, error)
     }), "Requester")
+    import system.dispatcher
+    system.scheduler.scheduleOnce(configuration.crawlDurationInMs.millis) {
+      requester ! PoisonPill
+      system.shutdown()
+    }
   }
 }

@@ -20,7 +20,16 @@ import hhbot.frontier._
 /**
  * @author Andrei Heidelbacher
  */
-class Crawler(configuration: Configuration, requester: ActorRef) extends Actor {
+object Crawler {
+  case class CrawlRequest(uri: URI)
+
+  def props(configuration: Configuration, requester: ActorRef): Props =
+    Props(new Crawler(configuration, requester))
+}
+
+class Crawler private (
+    configuration: Configuration,
+    requester: ActorRef) extends Actor {
   import context._
   import Crawler._
   import Fetcher._
@@ -38,10 +47,13 @@ class Crawler(configuration: Configuration, requester: ActorRef) extends Actor {
     .setFollowRedirects(configuration.followRedirects)
     .setMaximumNumberOfRedirects(configuration.maximumNumberOfRedirects)
   }
-  private val manager =
-    actorOf(FetcherManager.props(http), "Fetcher-Manager")
-  private val frontier =
-    actorOf(FrontierManager.props(configuration, http), "URI-Frontier")
+  private val fetcherProps = Fetcher.props(http)
+  private val resolverProps = HostResolver.props(fetcherProps)
+  private val fetcherManagerProps = FetcherManager.props(fetcherProps)
+  private val frontierManagerProps =
+    FrontierManager.props(configuration, resolverProps)
+  private val manager = actorOf(fetcherManagerProps, "Fetcher-Manager")
+  private val frontier = actorOf(frontierManagerProps, "URI-Frontier")
 
   watch(manager)
   watch(frontier)
@@ -55,8 +67,7 @@ class Crawler(configuration: Configuration, requester: ActorRef) extends Actor {
     case CrawlRequest(uri) => frontier ! Push(uri)
     case DemandRequest =>
       val requester = sender()
-      implicit val timeout =
-        Timeout(configuration.maximumCrawlDelayInMs.milliseconds)
+      implicit val timeout = Timeout(configuration.maximumCrawlDelayInMs.millis)
       val request = (frontier ? Pull).mapTo[PullResult]
         .map { case PullResult(uri) => FetchRequest(uri) }
       request.pipeTo(requester)(self)
@@ -75,11 +86,4 @@ class Crawler(configuration: Configuration, requester: ActorRef) extends Actor {
         case Failure(t) => requester ! Failed(uri, t)
       }
   }
-}
-
-object Crawler {
-  case class CrawlRequest(uri: URI)
-
-  def props(configuration: Configuration, requester: ActorRef): Props =
-    Props(new Crawler(configuration, requester))
 }

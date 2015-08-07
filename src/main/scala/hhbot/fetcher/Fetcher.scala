@@ -13,7 +13,15 @@ import scala.util.{Failure, Success, Try}
 /**
  * @author Andrei Heidelbacher
  */
-class Fetcher(http: Http) extends Actor {
+object Fetcher {
+  case object DemandRequest
+  case class FetchRequest(uri: URI)
+  case class FetchResult(uri: URI, content: Try[Array[Byte]])
+
+  def props(http: Http): Props = Props(new Fetcher(http))
+}
+
+class Fetcher private (http: Http) extends Actor {
   import context._
   import Fetcher._
   import FetcherManager._
@@ -29,12 +37,4 @@ class Fetcher(http: Http) extends Actor {
       result.pipeTo(sender())(self)
       parent ! DemandRequest
   }
-}
-
-object Fetcher {
-  case object DemandRequest
-  case class FetchRequest(uri: URI)
-  case class FetchResult(uri: URI, content: Try[Array[Byte]])
-
-  def props(http: Http): Props = Props(new Fetcher(http))
 }

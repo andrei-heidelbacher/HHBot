@@ -2,25 +2,29 @@ package hhbot.frontier
 
 import akka.actor._
 import akka.actor.SupervisorStrategy._
-import akka.pattern.{ask, pipe}
+import akka.pattern.{ask, AskTimeoutException, pipe}
 import akka.util.Timeout
-
-import dispatch.Http
 
 import java.net.URI
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
+import scala.concurrent.Future
 import scala.util.Try
 
 import hhbot.crawler.Configuration
-import hhbot.fetcher.Fetcher
 
 /**
  * @author Andrei Heidelbacher
  */
-class FrontierManager(configuration: Configuration, resolverProps: Props)
-  extends Actor {
+object FrontierManager {
+  def props(configuration: Configuration, resolverProps: Props): Props =
+    Props(new FrontierManager(configuration, resolverProps))
+}
+
+class FrontierManager private (
+    configuration: Configuration,
+    resolverProps: Props) extends Actor {
   import context._
   import HostManager._
 
@@ -30,53 +34,68 @@ class FrontierManager(configuration: Configuration, resolverProps: Props)
 
   private var hostToManager = Map.empty[String, ActorRef]
   private var managerToHost = Map.empty[ActorRef, String]
+  private var hostCoefficient = Map.empty[String, Int]
   private var hostQueue = Queue.empty[String]
   private var history = Set.empty[URI]
 
-  private def addHost(uri: URI): Unit = for {
-    hostURI <- Try(new URI(uri.getScheme + "://" + uri.getAuthority))
-    host <- Option(uri.getAuthority)
-  } {
-    val props =
-      HostManager.props(hostURI, configuration, resolverProps)
-    val manager = actorOf(props, host)
-    watch(manager)
-    hostToManager += host -> manager
-    managerToHost += manager -> host
-    hostQueue = hostQueue.enqueue(host)
+  private def addToHistory(uri: URI): Unit = {
+    history += uri
+    if (history.size > configuration.maximumHistorySize)
+      history = history.filter(link => hostCoefficient.contains(link.host))
+    if (history.size > configuration.maximumHistorySize / 2)
+      history = Set.empty[URI]
   }
 
-  private def pullHost(): String = {
-    val (host, remainingHosts) = hostQueue.dequeue
-    hostQueue = remainingHosts
-    if (hostToManager.contains(host)) {
+  private def addHost(host: String): Unit = {
+    if (!hostToManager.contains(host)) {
+      val props = HostManager.props(host, configuration, resolverProps)
+      val manager = actorOf(props, new URI(host).getAuthority)
+      hostToManager += host -> manager
+      managerToHost += manager -> host
+      hostCoefficient += host -> configuration.hostBatchSize
       hostQueue = hostQueue.enqueue(host)
-      host
-    } else {
-      pullHost()
+      watch(manager)
+    }
+  }
+
+  private def removeHost(manager: ActorRef): Unit = {
+    for (host <- managerToHost.get(manager)) {
+      hostToManager -= host
+      managerToHost -= manager
+      hostCoefficient -= host
+    }
+  }
+
+  private def pullHost(): Option[String] = {
+    if (hostQueue.isEmpty) None
+    else {
+      val (host, remainingHosts) = hostQueue.dequeue
+      if (hostCoefficient.contains(host)) {
+        val coefficient = hostCoefficient(host)
+        if (coefficient > 1) hostCoefficient += host -> (coefficient - 1)
+        else hostQueue = remainingHosts.enqueue(host)
+        Some(host)
+      } else {
+        hostQueue = remainingHosts
+        pullHost()
+      }
     }
   }
 
   def receive: Receive = {
     case Pull =>
-      implicit val timeout =
-        Timeout(configuration.maximumCrawlDelayInMs.milliseconds)
-      (hostToManager(pullHost()) ? Pull).pipeTo(sender())(self)
-    case Push(uri) =>
-      if (!history.contains(uri)) {
-        if (!hostToManager.contains(uri.getAuthority))
-          addHost(uri)
-        hostToManager.get(uri.getAuthority).foreach(_.forward(Push(uri)))
-        history += uri
+      implicit val timeout = Timeout(configuration.maximumCrawlDelayInMs.millis)
+      val result = pullHost() match {
+        case Some(host) => hostToManager(host) ? Pull
+        case None => Future.failed(new AskTimeoutException("Empty host queue!"))
       }
-    case Terminated(manager) =>
-      val host = managerToHost(manager)
-      hostToManager -= host
-      managerToHost -= manager
+      result.pipeTo(sender())(self)
+    case Push(uri) =>
+      for (host <- Try(uri.host) if !history.contains(uri)) {
+        addHost(host)
+        addToHistory(uri)
+        hostToManager(host).forward(Push(uri))
+      }
+    case Terminated(manager) => removeHost(manager)
   }
-}
-
-object FrontierManager {
-  def props(configuration: Configuration, http: Http): Props =
-    Props(new FrontierManager(configuration, Fetcher.props(http)))
 }
