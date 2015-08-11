@@ -34,19 +34,21 @@ abstract class Runner {
   def processFailure(uri: URI, error: Throwable): Unit
 
   final def main(args: Array[String]): Unit = {
+    val runner = this
     val system = ActorSystem(configuration.agentName)
     val requester = system.actorOf(Props(new Requester {
-      def configuration = this.configuration
-      def seedURIs = this.seedURIs
+      def configuration = runner.configuration
+      def seedURIs = runner.seedURIs
       def processResult(uri: URI, content: Array[Byte]) =
-        this.processResult(uri, content)
+        runner.processResult(uri, content)
       def processFailure(uri: URI, error: Throwable) =
-        this.processFailure(uri, error)
+        runner.processFailure(uri, error)
     }), "Requester")
     import system.dispatcher
     system.scheduler.scheduleOnce(configuration.crawlDurationInMs.millis) {
       requester ! PoisonPill
       system.shutdown()
+      System.exit(0)
     }
   }
 }

@@ -18,7 +18,7 @@ package hhbot.crawler
 
 import akka.actor._
 import akka.actor.SupervisorStrategy._
-import akka.pattern.{ask, pipe}
+import akka.pattern.{ask, AskTimeoutException, pipe}
 import akka.util.Timeout
 
 import dispatch.Http
@@ -82,7 +82,10 @@ class Crawler private (
       val requester = sender()
       implicit val timeout = Timeout(configuration.maximumCrawlDelayInMs.millis)
       val request = (frontier ? Pull).mapTo[PullResult]
-        .map { case PullResult(uri) => FetchRequest(uri) }
+        .map {
+          case PullResult(Some(uri)) => FetchRequest(uri)
+          case _ => throw new AskTimeoutException("Pull failed!")
+        }
       request.pipeTo(requester)(self)
     case FetchResult(uri, result) =>
       result match {

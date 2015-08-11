@@ -60,12 +60,16 @@ class FrontierManager private (
   }
 
   private def addHost(host: String): Unit = {
+    def formatActorName(hostName: String): String = {
+      hostName.replaceAll("/", "_")
+    }
+
     if (!hostToManager.contains(host)) {
       val props = HostManager.props(host, configuration, resolverProps)
-      val manager = actorOf(props, new URI(host).getAuthority)
+      val manager = actorOf(props, formatActorName(host))
       hostToManager += host -> manager
       managerToHost += manager -> host
-      hostCoefficient += host -> configuration.hostBatchSize
+      hostCoefficient += host -> 1
       hostQueue = hostQueue.enqueue(host)
       watch(manager)
     }
@@ -85,8 +89,12 @@ class FrontierManager private (
       val (host, remainingHosts) = hostQueue.dequeue
       if (hostCoefficient.contains(host)) {
         val coefficient = hostCoefficient(host)
-        if (coefficient > 1) hostCoefficient += host -> (coefficient - 1)
-        else hostQueue = remainingHosts.enqueue(host)
+        if (coefficient > 1) {
+          hostCoefficient += host -> (coefficient - 1)
+        } else {
+          hostCoefficient += host -> configuration.hostBatchSize
+          hostQueue = remainingHosts.enqueue(host)
+        }
         Some(host)
       } else {
         hostQueue = remainingHosts

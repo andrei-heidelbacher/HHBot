@@ -49,5 +49,6 @@ class Fetcher private (http: Http) extends Actor {
         .map(content => FetchResult(uri, content))
       result.pipeTo(sender())(self)
       parent ! DemandRequest
+    case Status.Failure(t) => parent ! DemandRequest
   }
 }

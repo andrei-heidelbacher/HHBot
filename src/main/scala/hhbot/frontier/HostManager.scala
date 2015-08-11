@@ -31,7 +31,7 @@ import hhbot.crawler.Configuration
 object HostManager {
   case class Push(uri: URI)
   case object Pull
-  case class PullResult(uri: URI)
+  case class PullResult(uri: Option[URI])
 
   implicit class URIHost(uri: URI) {
     def host: String = uri.getScheme + "://" + uri.getAuthority
@@ -70,6 +70,7 @@ class HostManager private (
     case Push(uri) if uri.host == host =>
       if (robotstxt.isAllowed(uri.getPath))
         become(nonEmptyHost(Queue(uri)))
+    case Pull => sender() ! PullResult(None)
     case ReceiveTimeout => self ! PoisonPill
   }
 
@@ -81,13 +82,10 @@ class HostManager private (
         become(nonEmptyHost(URIs.enqueue(uri)))
     case Pull =>
       val (uri, remainingURIs) = URIs.dequeue
-      val requester = sender()
       val delay = robotstxt.delayInMs.millis - (getTimeNow - lastRequest)
         .max(configuration.minimumCrawlDelayInMs.millis)
-      system.scheduler.scheduleOnce(delay) {
-        lastRequest = getTimeNow
-        requester ! PullResult(uri)
-      }
+      system.scheduler.scheduleOnce(delay, sender(), PullResult(Some(uri)))
+      lastRequest = getTimeNow + delay
       if (remainingURIs.isEmpty) become(emptyHost)
       else become(nonEmptyHost(remainingURIs))
   }

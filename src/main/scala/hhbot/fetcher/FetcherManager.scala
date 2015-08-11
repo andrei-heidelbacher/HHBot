@@ -37,7 +37,7 @@ class FetcherManager private (fetcherProps: Props) extends Actor {
     case _ => Restart
   }
 
-  createFetchers(64)
+  createFetchers(256)
   system.scheduler.schedule(1.seconds, 3.seconds) {
     notifyFetchers()
   }
