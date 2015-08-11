@@ -42,7 +42,7 @@ object Crawler {
 
 class Crawler private (
     configuration: Configuration,
-    requester: ActorRef) extends Actor {
+    requester: ActorRef) extends Actor with ActorLogging {
   import context._
   import Crawler._
   import Fetcher._
@@ -90,6 +90,7 @@ class Crawler private (
     case FetchResult(uri, result) =>
       result match {
         case Success(content) =>
+          log.info("Successfully fetched " + uri)
           for (page <- Try(Page(uri.toURL, content))) {
             val tags = page.metaTags(configuration.agentName)
             if (tags.contains(All) || tags.contains(Index))
@@ -99,7 +100,9 @@ class Crawler private (
                 .flatMap(link => Try(link.toURI).toOption)
                 .foreach(crawlURI)
           }
-        case Failure(t) => requester ! Failed(uri, t)
+        case Failure(t) =>
+          log.info("Failed to fetch " + uri + " because " + t.getMessage)
+          requester ! Failed(uri, t)
       }
   }
 }

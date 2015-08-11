@@ -18,6 +18,8 @@ package hhbot.runner
 
 import akka.actor._
 
+import com.typesafe.config.ConfigFactory
+
 import java.io.File
 import java.net.URI
 
@@ -41,7 +43,8 @@ abstract class Runner {
   final def main(args: Array[String]): Unit = {
     prepareFolders()
     val runner = this
-    val system = ActorSystem(configuration.agentName)
+    val conf = ConfigFactory.load()
+    val system = ActorSystem(configuration.agentName, conf)
     val requester = system.actorOf(Props(new Requester {
       def configuration = runner.configuration
       def seedURIs = runner.seedURIs

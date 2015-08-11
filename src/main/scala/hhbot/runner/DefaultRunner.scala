@@ -22,8 +22,6 @@ import java.net.URI
 import hhbot.crawler.Configuration
 
 object DefaultRunner extends Runner {
-  val writer = new PrintWriter("hhbot/logs/history.log")
-
   def configuration = Configuration(
     agentName = "HHBot",
     userAgentString = "HHBot",
@@ -52,8 +50,6 @@ object DefaultRunner extends Runner {
 
   def processResult(uri: URI, content: Array[Byte]) = {
     println("Retrieved " + uri.toString)
-    writer.println(uri.toString)
-    writer.flush()
   }
 
   def processFailure(uri: URI, error: Throwable) = {

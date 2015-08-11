@@ -6,8 +6,10 @@ scalaVersion := "2.11.7"
 
 crossPaths := false
 
+resolvers += DefaultMavenRepository
+
 resolvers +=
-  "Typesafe Repository" at "repo.typesafe.com/typesafe/releases/"
+  "Typesafe Repository releases" at "repo.typesafe.com/typesafe/releases/"
 
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-actor" % "2.3.4",
@@ -18,3 +20,5 @@ libraryDependencies ++= Seq(
 )
 
 libraryDependencies += "net.databinder.dispatch" %% "dispatch-core" % "0.11.2"
+
+libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.1.2"
