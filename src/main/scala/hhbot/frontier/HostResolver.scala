@@ -52,10 +52,10 @@ class HostResolver private (fetcherProps: Props) extends Actor {
 
   private def resolveRobots(manager: ActorRef, content: Array[Byte]): Unit = {
     val robots = Robotstxt(content)
-    /*import java.io.PrintWriter
-    val writer = new PrintWriter(manager.path.name)
+    import java.io.PrintWriter
+    val writer = new PrintWriter("hhbot/logs/robotstxt/" + manager.path.name)
     writer.write(new String(content, "UTF-8"))
-    writer.close()*/
+    writer.close()
     manager ! PushRobotstxt(robots)
     robots.sitemaps
       .flatMap(link => Try(new URI(link)).toOption)

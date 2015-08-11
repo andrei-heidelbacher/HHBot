@@ -18,6 +18,7 @@ package hhbot.runner
 
 import akka.actor._
 
+import java.io.File
 import java.net.URI
 
 import scala.concurrent.duration._
@@ -33,7 +34,12 @@ abstract class Runner {
 
   def processFailure(uri: URI, error: Throwable): Unit
 
+  private def prepareFolders(): Unit = {
+    new File("hhbot/logs/robotstxt").mkdirs()
+  }
+
   final def main(args: Array[String]): Unit = {
+    prepareFolders()
     val runner = this
     val system = ActorSystem(configuration.agentName)
     val requester = system.actorOf(Props(new Requester {

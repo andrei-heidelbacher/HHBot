@@ -108,7 +108,7 @@ class FrontierManager private (
       implicit val timeout = Timeout(configuration.maximumCrawlDelayInMs.millis)
       val result = pullHost() match {
         case Some(host) => hostToManager(host) ? Pull
-        case None => Future.failed(new AskTimeoutException("Empty host queue!"))
+        case None => Future.failed(new AskTimeoutException("Empty frontier!"))
       }
       result.pipeTo(sender())(self)
     case Push(uri) =>

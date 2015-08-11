@@ -22,13 +22,13 @@ import java.net.URI
 import hhbot.crawler.Configuration
 
 object DefaultRunner extends Runner {
-  val writer = new PrintWriter("history.log")
+  val writer = new PrintWriter("hhbot/logs/history.log")
 
   def configuration = Configuration(
     agentName = "HHBot",
     userAgentString = "HHBot",
     connectionTimeoutInMs = 2500,
-    requestTimeoutInMs = 5000,
+    requestTimeoutInMs = 15000,
     followRedirects = true,
     maximumNumberOfRedirects = 3,
     filterURI = uri => {
