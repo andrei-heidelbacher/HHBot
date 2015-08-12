@@ -34,7 +34,10 @@ import hhbot.fetcher._
 import hhbot.frontier._
 
 object Crawler {
-  case class CrawlRequest(uri: URI)
+  sealed trait Message
+  case class CrawlRequest(uri: URI) extends Message
+  case class Result(uri: URI, content: Array[Byte]) extends Message
+  case class Failed(uri: URI, error: Throwable) extends Message
 
   def props(configuration: Configuration, requester: ActorRef): Props =
     Props(new Crawler(configuration, requester))
@@ -47,7 +50,6 @@ class Crawler private (
   import Crawler._
   import Fetcher._
   import HostManager._
-  import Requester._
 
   override val supervisorStrategy = OneForOneStrategy() {
     case _ => Restart
@@ -90,7 +92,6 @@ class Crawler private (
     case FetchResult(uri, result) =>
       result match {
         case Success(content) =>
-          log.info("Successfully fetched " + uri)
           for (page <- Try(Page(uri.toURL, content))) {
             val tags = page.metaTags(configuration.agentName)
             if (tags.contains(All) || tags.contains(Index))
@@ -100,9 +101,10 @@ class Crawler private (
                 .flatMap(link => Try(link.toURI).toOption)
                 .foreach(crawlURI)
           }
+          log.info("Successfully fetched " + uri)
         case Failure(t) =>
-          log.info("Failed to fetch " + uri + " because " + t.getMessage)
           requester ! Failed(uri, t)
+          log.info("Failed to fetch " + uri + " because " + t.getMessage)
       }
   }
 }

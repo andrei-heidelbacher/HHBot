@@ -27,9 +27,10 @@ import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
 object Fetcher {
-  case object DemandRequest
-  case class FetchRequest(uri: URI)
-  case class FetchResult(uri: URI, content: Try[Array[Byte]])
+  sealed trait Message
+  case object DemandRequest extends Message
+  case class FetchRequest(uri: URI) extends Message
+  case class FetchResult(uri: URI, content: Try[Array[Byte]]) extends Message
 
   def props(http: Http): Props = Props(new Fetcher(http))
 }

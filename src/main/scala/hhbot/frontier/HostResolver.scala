@@ -30,13 +30,15 @@ import scala.util.Try
 import hhbot.fetcher.Fetcher
 
 object HostResolver {
-  case class ResolveHost(host: String)
-  case class PushRobotstxt(robots: Robotstxt)
+  sealed trait Message
+  case class ResolveHost(host: String) extends Message
+  case class PushRobotstxt(robots: Robotstxt) extends Message
 
   def props(fetcherProps: Props): Props = Props(new HostResolver(fetcherProps))
 }
 
-class HostResolver private (fetcherProps: Props) extends Actor {
+class HostResolver private (fetcherProps: Props) extends Actor
+  with ActorLogging {
   import context._
   import HostResolver._
   import Fetcher._
@@ -50,16 +52,16 @@ class HostResolver private (fetcherProps: Props) extends Actor {
 
   private val fetcher = actorOf(fetcherProps, "Robots-Fetcher")
 
-  private def resolveRobots(manager: ActorRef, content: Array[Byte]): Unit = {
+  private def resolveRobots(
+      manager: ActorRef,
+      uri: URI,
+      content: Array[Byte]): Unit = {
     val robots = Robotstxt(content)
-    import java.io.PrintWriter
-    val writer = new PrintWriter("hhbot/logs/robotstxt/" + manager.path.name)
-    writer.write(new String(content, "UTF-8"))
-    writer.close()
     manager ! PushRobotstxt(robots)
     robots.sitemaps
       .flatMap(link => Try(new URI(link)).toOption)
       .foreach(uri => fetcher ! FetchRequest(uri))
+    log.info("Retrieved " + uri + "\n" + new String(content, "UTF-8"))
   }
 
   private def resolveSitemap(
@@ -70,6 +72,7 @@ class HostResolver private (fetcherProps: Props) extends Actor {
     link <- sitemap.links
     linkURI <- Try(link.toURI)
   } {
+    log.info("Retrieved sitemap for " + uri)
     if (sitemap.isSitemapIndex) fetcher ! FetchRequest(linkURI)
     else manager ! Push(linkURI)
   }
@@ -88,7 +91,7 @@ class HostResolver private (fetcherProps: Props) extends Actor {
   private def resolving(manager: ActorRef, host: String): Receive = {
     case FetchResult(uri, result) =>
       for (content <- result if uri.host == host) {
-        if (uri.getPath == "/robots.txt") resolveRobots(manager, content)
+        if (uri.getPath == "/robots.txt") resolveRobots(manager, uri, content)
         else resolveSitemap(manager, uri, content)
       }
     case ReceiveTimeout => context.become(idle)

@@ -20,14 +20,8 @@ import akka.actor._
 
 import java.net.URI
 
-object Requester {
-  case class Result(uri: URI, content: Array[Byte])
-  case class Failed(uri: URI, error: Throwable)
-}
-
 abstract class Requester extends Actor {
   import context._
-  import Requester._
   import Crawler._
 
   private val crawler = actorOf(Crawler.props(configuration, self), "Crawler")

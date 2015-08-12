@@ -22,7 +22,8 @@ import akka.actor.SupervisorStrategy._
 import scala.concurrent.duration._
 
 object FetcherManager {
-  case object RequestsAvailable
+  sealed trait Message
+  case object RequestsAvailable extends Message
 
   def props(fetcherProps: Props): Props =
     Props(new FetcherManager(fetcherProps))

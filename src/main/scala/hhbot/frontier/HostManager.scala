@@ -29,9 +29,10 @@ import scala.concurrent.duration._
 import hhbot.crawler.Configuration
 
 object HostManager {
-  case class Push(uri: URI)
-  case object Pull
-  case class PullResult(uri: Option[URI])
+  sealed trait Message
+  case class Push(uri: URI) extends Message
+  case object Pull extends Message
+  case class PullResult(uri: Option[URI]) extends Message
 
   implicit class URIHost(uri: URI) {
     def host: String = uri.getScheme + "://" + uri.getAuthority

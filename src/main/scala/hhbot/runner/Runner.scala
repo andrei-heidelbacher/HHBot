@@ -20,7 +20,6 @@ import akka.actor._
 
 import com.typesafe.config.ConfigFactory
 
-import java.io.File
 import java.net.URI
 
 import scala.concurrent.duration._
@@ -36,12 +35,7 @@ abstract class Runner {
 
   def processFailure(uri: URI, error: Throwable): Unit
 
-  private def prepareFolders(): Unit = {
-    new File("hhbot/logs/robotstxt").mkdirs()
-  }
-
   final def main(args: Array[String]): Unit = {
-    prepareFolders()
     val runner = this
     val conf = ConfigFactory.load()
     val system = ActorSystem(configuration.agentName, conf)

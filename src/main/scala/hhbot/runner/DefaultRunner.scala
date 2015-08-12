@@ -16,7 +16,6 @@
 
 package hhbot.runner
 
-import java.io.PrintWriter
 import java.net.URI
 
 import hhbot.crawler.Configuration
