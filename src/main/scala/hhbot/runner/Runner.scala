@@ -35,7 +35,7 @@ abstract class Runner {
 
   def processFailure(uri: URI, error: Throwable): Unit
 
-  final def main(args: Array[String]): Unit = {
+  final def run(): Unit = {
     val runner = this
     val conf = ConfigFactory.load()
     val system = ActorSystem(configuration.agentName, conf)

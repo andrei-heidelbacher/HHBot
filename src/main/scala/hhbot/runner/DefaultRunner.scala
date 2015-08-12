@@ -54,4 +54,8 @@ object DefaultRunner extends Runner {
   def processFailure(uri: URI, error: Throwable) = {
     println("Failed " + uri.toString + " because " + error.getMessage)
   }
+
+  def main(args: Array[String]): Unit = {
+    run()
+  }
 }
