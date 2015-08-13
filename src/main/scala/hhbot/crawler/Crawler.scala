@@ -64,7 +64,8 @@ class Crawler private (
   }
   private val fetcherProps = Fetcher.props(http)
   private val resolverProps = HostResolver.props(fetcherProps)
-  private val fetcherManagerProps = FetcherManager.props(fetcherProps)
+  private val fetcherManagerProps =
+    FetcherManager.props(fetcherProps, configuration.fetcherCount)
   private val frontierManagerProps =
     FrontierManager.props(configuration, resolverProps)
   private val manager = actorOf(fetcherManagerProps, "Fetcher-Manager")

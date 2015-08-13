@@ -25,11 +25,12 @@ object FetcherManager {
   sealed trait Message
   case object RequestsAvailable extends Message
 
-  def props(fetcherProps: Props): Props =
-    Props(new FetcherManager(fetcherProps))
+  def props(fetcherProps: Props, fetcherCount: Int): Props =
+    Props(new FetcherManager(fetcherProps, fetcherCount))
 }
 
-class FetcherManager private (fetcherProps: Props) extends Actor {
+class FetcherManager private (fetcherProps: Props, fetcherCount: Int)
+  extends Actor {
   import context._
   import FetcherManager._
   import Fetcher._
@@ -38,16 +39,16 @@ class FetcherManager private (fetcherProps: Props) extends Actor {
     case _ => Restart
   }
 
-  createFetchers(256)
+  createFetchers(fetcherCount)
   system.scheduler.schedule(1.seconds, 3.seconds) {
     notifyFetchers()
   }
 
-  private def createFetchers(fetcherCount: Int): Unit = {
-    require(fetcherCount >= 0)
-    if (fetcherCount > 0) {
-      watch(actorOf(fetcherProps, "Fetcher-" + fetcherCount))
-      createFetchers(fetcherCount - 1)
+  private def createFetchers(count: Int): Unit = {
+    require(count >= 0)
+    if (count > 0) {
+      watch(actorOf(fetcherProps, "Fetcher-" + count))
+      createFetchers(count - 1)
     }
   }
 

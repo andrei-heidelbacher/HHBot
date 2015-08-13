@@ -33,7 +33,8 @@ case class Configuration(
     maximumCrawlDelayInMs: Int,
     maximumHistorySize: Int,
     hostBatchSize: Int,
-    crawlDurationInMs: Long) {
+    crawlDurationInMs: Long,
+    fetcherCount: Int) {
   require(agentName.nonEmpty)
   require(userAgentString.startsWith(agentName))
   require(connectionTimeoutInMs > 0)
@@ -45,4 +46,5 @@ case class Configuration(
   require(maximumHistorySize > 0)
   require(hostBatchSize > 0)
   require(crawlDurationInMs > 0L)
+  require(fetcherCount > 0)
 }

@@ -38,8 +38,9 @@ object DefaultRunner extends Runner {
     minimumCrawlDelayInMs = 250,
     maximumCrawlDelayInMs = 1000,
     maximumHistorySize = 1000000,
-    hostBatchSize = 10,
-    crawlDurationInMs = 60000L)
+    hostBatchSize = 5,
+    crawlDurationInMs = 60000L,
+    fetcherCount = 256)
 
   def seedURIs = Seq(
     new URI("http://www.google.com"),
@@ -48,11 +49,12 @@ object DefaultRunner extends Runner {
     new URI("http://www.gsp.ro"))
 
   def processResult(uri: URI, content: Array[Byte]) = {
-    println("Retrieved " + uri.toString)
+    //println("Retrieved " + uri.toString)
+    println(uri.toString)
   }
 
   def processFailure(uri: URI, error: Throwable) = {
-    println("Failed " + uri.toString + " because " + error.getMessage)
+    //println("Failed " + uri.toString + " because " + error.getMessage)
   }
 
   def main(args: Array[String]): Unit = {
