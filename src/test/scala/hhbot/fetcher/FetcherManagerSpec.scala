@@ -3,7 +3,7 @@ package hhbot.fetcher
 import akka.actor._
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 
-import org.scalatest.{BeforeAndAfterAll, GivenWhenThen, WordSpecLike}
+import org.scalatest.{BeforeAndAfterAll, WordSpecLike}
 
 import java.net.URI
 
@@ -12,13 +12,12 @@ import scala.concurrent.duration._
 import scala.util.Try
 
 class FetcherManagerSpec(_system: ActorSystem) extends TestKit(_system)
-with ImplicitSender
-with WordSpecLike
-with BeforeAndAfterAll
-with GivenWhenThen {
+  with ImplicitSender
+  with WordSpecLike
+  with BeforeAndAfterAll {
   import FetcherManager._
 
-  def this() = this(ActorSystem("FetcherSpec"))
+  def this() = this(ActorSystem("FetcherManagerSpec"))
 
   override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
